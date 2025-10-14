@@ -1,8 +1,12 @@
-import os, datetime, re, requests, feedparser
+import os
+import datetime
+import re
+import requests
+import feedparser
 from pathlib import Path
 from slugify import slugify
 
-# ---- Sources d'actus Tech & Futur (tu peux en ajouter/retirer) ----
+# ---- Sources d'actualités Tech & Futur ----
 FEEDS = [
     "https://www.futura-sciences.com/rss/actualites.xml",
     "https://www.space.com/feeds/all",
@@ -19,12 +23,18 @@ MODEL = os.getenv("LLM_MODEL", "llama3")
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate")
 TIMEOUT = 20
 
+
+# -------------------------------------------------
+# 🔹 Fonctions utilitaires
+# -------------------------------------------------
 def strip_html(text: str) -> str:
+    """Supprime les balises HTML pour garder du texte propre."""
     text = re.sub(r"<[^>]+>", " ", text or "")
     return re.sub(r"\s+", " ", text).strip()
 
+
 def llm_summarize(title: str, text: str) -> str:
-    """Tente un résumé via Ollama si dispo, sinon fallback propre."""
+    """Essaye de générer un résumé IA via Ollama (ou fallback simple)."""
     prompt = f"""Tu es un journaliste futuriste.
 Résume de façon captivante et crédible pour un jeune public.
 Structure : 1 accroche courte • 4 points clés • 1 phrase qui ouvre sur le futur.
@@ -44,6 +54,8 @@ Texte:
                 return rep
     except Exception:
         pass
+
+    # 🔸 Fallback simple si Ollama n'est pas dispo
     base = strip_html(text)
     return (
         f"• {title}\n"
@@ -51,7 +63,10 @@ Texte:
         "→ Ce progrès pourrait transformer notre quotidien plus vite qu'on ne le pense."
     )
 
-# ---- Récupération des items (robuste) ----
+
+# -------------------------------------------------
+# 🔹 Récupération des actualités (robuste)
+# -------------------------------------------------
 items = []
 for url in FEEDS:
     try:
@@ -65,6 +80,7 @@ for url in FEEDS:
     except Exception:
         continue
 
+# 🔸 Si aucun flux n’a répondu, on publie quand même un contenu générique
 if not items:
     items = [{
         "title": "Découverte: l'IA accélère les avancées scientifiques",
@@ -72,6 +88,9 @@ if not items:
         "summary": "Même si les flux sont indisponibles, on publie une synthèse pour garder le rythme."
     }]
 
+# -------------------------------------------------
+# 🔹 Génération du contenu markdown
+# -------------------------------------------------
 blocks = []
 for it in items[:5]:
     synth = llm_summarize(it["title"], it["summary"] or it["title"])
@@ -84,6 +103,10 @@ for it in items[:5]:
 today = datetime.date.today().strftime("%Y-%m-%d")
 post_title = f"Innovations & Futur — {today}"
 slug = slugify(post_title)
+
+# ✅ On met le join à part pour éviter l'erreur de backslash
+content_blocks = "\n\n".join(blocks)
+
 md = f"""---
 layout: post
 title: "{post_title}"
@@ -92,11 +115,11 @@ date: {today}
 
 Bienvenue sur **Tech & Futur** — chaque jour, une découverte qui change le monde.
 
-{'\n\n'.join(blocks)}
+{content_blocks}
 
 _Disclaimer_: ce site peut contenir des liens d’affiliation utiles (gadgets tech, livres, outils IA).
 """
 
 out_path = POSTS_DIR / f"{today}-{slug}.md"
 out_path.write_text(md, encoding="utf-8")
-print("Article généré:", out_path)
+print("✅ Article généré :", out_path)
