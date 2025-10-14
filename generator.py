@@ -23,25 +23,19 @@ MODEL = os.getenv("LLM_MODEL", "llama3")
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate")
 TIMEOUT = 20
 
-
-# -------------------------------------------------
-# 🔹 Fonctions utilitaires
-# -------------------------------------------------
+# ------------------ utilitaires ------------------
 def strip_html(text: str) -> str:
-    """Supprime les balises HTML pour garder du texte propre."""
     text = re.sub(r"<[^>]+>", " ", text or "")
     return re.sub(r"\s+", " ", text).strip()
 
-
 def llm_summarize(title: str, text: str) -> str:
-    """Essaye de générer un résumé IA via Ollama (ou fallback simple)."""
-    prompt = f"""Tu es un journaliste futuriste.
-Résume de façon captivante et crédible pour un jeune public.
-Structure : 1 accroche courte • 4 points clés • 1 phrase qui ouvre sur le futur.
-Titre: {title}
-Texte:
-{text[:7000]}
-"""
+    prompt = (
+        "Tu es un journaliste futuriste.\n"
+        "Résume de façon captivante et crédible pour un jeune public.\n"
+        "Structure : 1 accroche courte • 4 points clés • 1 phrase qui ouvre sur le futur.\n"
+        "Titre: {title}\nTexte:\n{chunk}\n"
+    ).format(title=title, chunk=(text[:7000] if text else ""))
+
     try:
         r = requests.post(
             OLLAMA_URL,
@@ -55,18 +49,12 @@ Texte:
     except Exception:
         pass
 
-    # 🔸 Fallback simple si Ollama n'est pas dispo
     base = strip_html(text)
     return (
-        f"• {title}\n"
-        f"{base[:400]}...\n"
-        "→ Ce progrès pourrait transformer notre quotidien plus vite qu'on ne le pense."
-    )
+        "• {title}\n{body}...\n→ Ce progrès pourrait transformer notre quotidien plus vite qu'on ne le pense."
+    ).format(title=title, body=base[:400])
 
-
-# -------------------------------------------------
-# 🔹 Récupération des actualités (robuste)
-# -------------------------------------------------
+# ------------------ collecte ------------------
 items = []
 for url in FEEDS:
     try:
@@ -80,7 +68,6 @@ for url in FEEDS:
     except Exception:
         continue
 
-# 🔸 Si aucun flux n’a répondu, on publie quand même un contenu générique
 if not items:
     items = [{
         "title": "Découverte: l'IA accélère les avancées scientifiques",
@@ -88,26 +75,22 @@ if not items:
         "summary": "Même si les flux sont indisponibles, on publie une synthèse pour garder le rythme."
     }]
 
-# -------------------------------------------------
-# 🔹 Génération du contenu markdown
-# -------------------------------------------------
+# ------------------ rendu markdown ------------------
 blocks = []
 for it in items[:5]:
     synth = llm_summarize(it["title"], it["summary"] or it["title"])
-    block = f"### {it['title']}\n\n"
+    block = "### {t}\n\n".format(t=it["title"])
     if it["link"]:
-        block += f"Source: {it['link']}\n\n"
-    block += f"{synth}\n"
+        block += "Source: {u}\n\n".format(u=it["link"])
+    block += synth + "\n"
     blocks.append(block)
 
 today = datetime.date.today().strftime("%Y-%m-%d")
-post_title = f"Innovations & Futur — {today}"
+post_title = "Innovations & Futur — {d}".format(d=today)
 slug = slugify(post_title)
-
-# ✅ On met le join à part pour éviter l'erreur de backslash
 content_blocks = "\n\n".join(blocks)
 
-md = f"""---
+md = """---
 layout: post
 title: "{post_title}"
 date: {today}
@@ -118,8 +101,8 @@ Bienvenue sur **Tech & Futur** — chaque jour, une découverte qui change le mo
 {content_blocks}
 
 _Disclaimer_: ce site peut contenir des liens d’affiliation utiles (gadgets tech, livres, outils IA).
-"""
+""".format(post_title=post_title, today=today, content_blocks=content_blocks)
 
-out_path = POSTS_DIR / f"{today}-{slug}.md"
+out_path = POSTS_DIR / "{date}-{slug}.md".format(date=today, slug=slug)
 out_path.write_text(md, encoding="utf-8")
 print("✅ Article généré :", out_path)
