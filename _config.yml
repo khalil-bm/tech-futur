@@ -1,0 +1,9 @@
+title: "Tech & Futur"
+description: "Chaque jour, une découverte qui change le monde."
+baseurl: ""
+url: "https://<ton-compte>.github.io/tech-futur"   # remplace <ton-compte> et le nom du repo si différent
+theme: minima
+minima:
+  skin: dark
+markdown: kramdown
+permalink: /:categories/:year/:month/:day/:title/
